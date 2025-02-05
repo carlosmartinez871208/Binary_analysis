@@ -252,3 +252,58 @@ El segmento dinamico contiene una serie de estructuras que contiene informacion 
             Elf64_Addr d_ptr;                 /* Address value */
         } d_un;
     } Elf64_Dyn;
+
+## PT_NOTE
+Un segmento de este tipo puede contener informacion auxiliar que es pertinente a un fabricante o sistema en especifico.
+
+Muchas veces los fabricantes o sistemas necesitan marcar un archivo tipo objeto con informacion especial que otros programas revisaran por cuestiones de acuerdos comerciales, compatibilidad, etc. Las secciones de tipo **SHT_NOTE** y los elementos del program header de tipo **PT_NOTE** pueden ser usados para este proposito. Esta informacion en las secciones y los elementos del program header contiene un cierto numero de entradas, cada una de ellas es un array de 4 bytes en el formato del procesador utilizado. Las etiquetas aparecen debajo para explicar lo organizacion de la informacion de **note**, pero estas no forman parte de la especificacion.
+
+Algo interesante es que este segmento es solo usado para especificacion e informacion del Sistema Operativo (Operative System - OS).
+
+## PT_INTERP
+Este segmento pequeno contiene solamente la localizacion y tamano de las cadenas (strings) que terminan en **null**, describiendo donde esta el interprete del programa.
+
+    /lib/linux-ld.so.2
+
+Normalmente la direccion anterior es generalmente la direccion del linker que tambien es el interprete del programa.
+
+## PT_PHDR
+Este segmento contiene la localizacion y tamano de la tabla del program header. La tabla **PT_PHDR** contiene todas las direcciones fisicas describiendo los segmentos del archivos.
+
+Podemos usar el siguiente comando para ver la tabla **Phdr**
+
+    readelf -l elf_or_object
+
+## ELF section headers.
+Primeramente se debe aclarar que una seccion (**section**) no es un segmento (**segment**), los segmentos son necesarios para la ejecucion de un programa y dentro de cada segmento hay codigo e informacion dividido en secciones.
+
+Una tabla **section header** existe para referenciar la localizacion y el tamano de las secciones, normalmente usadas para linkeo y debuggeo.
+
+Los **section headers** no son usados para la ejecucion de un programa y un programa se ejecutara bien sin tener una tabla de **section header**. Esto es porque la tabla de **section headers** no describen el programa en memoria.
+
+La responsabilidad de describir el programa en memoria es de la tabla **program header**. Los **section headers** son complementarios a los **program headers**.
+
+Con el siguiente comando se muestra que secciones estan mapeadas a cuales segmentos y nos ayuda aver las relaciones entre secciones y segmentos.
+
+    readelf -l
+
+Si los **section headers** fueron suprimidos (stripped), no significa que las secciones no esten ahi, solamente no pueden ser referenciadas por **section headers** y menos informacion esta disponible para los debuggers y programas de analisis.
+
+Cada seccion contiene informacion y codigo de algun tipo. Todo esto puede variar desde: variables globales o informacion acerca del enlazamiento dinamico que es necesario para el linker. Como se habia mencionado antes cada ELF tiene secciones, pero no todos los ELF tienen **section headers**.
+
+A continuacion se muestra la estructura de un **section header**.
+
+    typedef struct
+    {
+        Elf64_Word    sh_name;                /* Section name (string tbl index) */
+        Elf64_Word    sh_type;                /* Section type */
+        Elf64_Xword   sh_flags;               /* Section flags */
+        Elf64_Addr    sh_addr;                /* Section virtual addr at execution */
+        Elf64_Off     sh_offset;              /* Section file offset */
+        Elf64_Xword   sh_size;                /* Section size in bytes */
+        Elf64_Word    sh_link;                /* Link to another section */
+        Elf64_Word    sh_info;                /* Additional section information */
+        Elf64_Xword   sh_addralign;           /* Section alignment */
+        Elf64_Xword   sh_entsize;             /* Entry size if section holds table */
+    } Elf64_Shdr;
+

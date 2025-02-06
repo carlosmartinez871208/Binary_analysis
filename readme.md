@@ -307,3 +307,88 @@ A continuacion se muestra la estructura de un **section header**.
         Elf64_Xword   sh_entsize;             /* Entry size if section holds table */
     } Elf64_Shdr;
 
+## La seccion **.text**.
+Esta seccion de codigo contiene todas las instrucciones del programa. En un programa ejecutable donde tambie esta el **Phdr's**, esta seccion estaria dentro del rango del segmento **text**.
+Esta seccion es de tipo **SHT_PROGBITS**.
+
+## La seccion **.rodata**.
+Esta seccion contiene informacion de solo lectura (**read-only**) como por ejemplo cadenas de caracteres de una linea de codigo en C, como por ejemplo:
+
+    printf("Hello World!\n");
+
+Esta seccion es **read-only** y por lo tanto debe existir en un segmento de solo escritura de un ejecutable, **.rodata** esta ubicado dentro del rango del segmento **text** y no el segmento **data**.
+
+Por lo tanto esta seccion es **read-only** y es del tipo **SHT_PROGBITS**.
+
+## La seccion **.plt section**.
+La tabla de proceso de linkeo (PLT - Process linkage table) contiene el codigo necesario para el linker dinamico y llamar a las funciones que son importadas desde librerias dinamicas (**shared object**).
+
+Esta seccion tambien reside in el segmento **text** y contiene codigo, por lo tanto tambien es de tipo **SHT_PROGBITS**.
+
+## La seccion **.data**.
+La seccion **data** no debe ser confundida con el ***segmento*** **data**, la seccion **data** existe dentro del segmento **data** y contiene las variables globales inicializadas de un programa.
+
+Esta seccion contiene las variables de un programa y es de tipo **SHT_PROGBITS**.
+
+## La seccion **.bss**.
+La seccion **bss** contiene variables globales no inicializadas de un programa, esta seccion forma parte del segmento **data** y por lo tanto no toma mas espacio en el disco que 4 bytes la cual representa a la seccion por si misma.
+
+Las variables son inicializadas a cero en el moneto de carga y las variables peuden ser asignadas durante la ejecucion del programa.
+
+Esta seccion es de tipo **SHT_NOBITS** mientras no contenga variables.
+
+## La seccion **.got.plt**. 
+La tabla global de offsets (**GOT - Global Offset Table**). Trabaja junto con el **PLT** (Process Linkage Table) para proveer accesos a las libreria dinamicas importadas o **shared objects** y es modificado por linker dinamico cuando el programa esta corriendo (runtime).
+
+Esta seccion esta relacionada con la ejecucion del programa y por lo tanto es de tipo **SHT_PROGBITS**.
+
+## La seccion **.dynsym**.
+La seccion **dynsym** contiene informacion de los simbolos dinamicos importados desde las librerias compartidas.
+
+Esta contenido dentro segmento **text** y es de tipo **SHT_DYNSYM**.
+
+## La seccion **.dynstr**.
+La seccion **dynstr** contiene la tabla de cadenas para los simbolos dinamicos que tiene el nombre de cada simbolo en una serie de cadenas terminadas en **null**.
+
+## La seccion **.rel.\***
+Las secciones de relocalizacion contienen informacion acerca de como las partes de un archivo **ELF** o proceso de imagen deben ser procesadas o modificadas al momento del linkeo o cuando el programa esta corriendo (runtime).
+
+Las secciones de relocalizacion son de tipo **SHT_REL** mientras contengan datos de relocalizacion.
+
+## La seccion **.hash**.
+La seccion **hash** muchas veces llamada **gnu.hash**, contiene una tabla de simbolos tipo hash para busqueda de simbolos.
+
+A continuacion se muestra el algoritmo usado para la busqueda de simbolos en un **ELF** de linux.
+
+    uint32_t
+    dl_new_hash (const char *s)
+    {
+        uint32_t h = 5381;
+        for (unsigned char c = *s; c != '\0'; c = *++s)
+            h = h * 33 + c;
+        return h;
+    }
+
+## La seccion **.symtab**.
+La seccion **symtab** contiene la informacion de los simbolos de tipo ***ElfN_Sym***.
+
+Esta seccion es de tipo **SHT_SYMTAB** ya que contiene informacion de los simbolos.
+
+## La seccion **.strtab**.
+La seccion **strtab** contiene la tabla de simbolos de cadena que esta referenciada por **st_name** dentro de la estructura **ElfN_Sym**.
+
+Esta seccion es de tipo **SHT_STRTAB** ya que contiene la tabla de cadenas.
+
+## La seccion **.shstrtab**.
+La seccion **shstrtab** contiene la tabla de cadenas del header que un set de cadenas terminadas en **null** que contienen los nombres de cada seccion como: **.text**, **.data**, etcetera. 
+
+Esta seccion esta siendo apuntada por la entrada del header del archivo **ELF** ***e_shstrndx*** que contiene el offset de **.shstrtab**.
+
+Esta seccion es de tipo **SHT_STRTAB** ya que contiene la tabla de cadenas.
+
+## Las secciones **.ctors** y **.dtors**.
+Las secciones de los constructores (**ctors**) y destructores (**dtors**) contienen apuntadores a funciones para inicializar (en el caso de los constructores) y finalizar (en el caso de los destructores) codigo que es ejecutado antes del **main()** cuerpo del codigo del programa.
+
+### Hay mas secciones y tipos pero se han cubierto los mas usados en un ejecutable dinamicante enlazado.
+
+Ahora podemos ver como un ejecutbale es mapeado con ambos: **phdrs** y **shdrs**.

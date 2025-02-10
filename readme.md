@@ -391,4 +391,415 @@ Las secciones de los constructores (**ctors**) y destructores (**dtors**) contie
 
 ### Hay mas secciones y tipos pero se han cubierto los mas usados en un ejecutable dinamicante enlazado.
 
-Ahora podemos ver como un ejecutbale es mapeado con ambos: **phdrs** y **shdrs**.
+Ahora podemos ver como un ejecutable es mapeado con ambos: **phdrs** y **shdrs**.
+
+## El segmento **text** se ve de la siguiente manera.
+> [.text]: Contiene el codigo del programa.
+
+> [.rodata]: Contiene la informacion de solo lecura.
+
+> [.hash]: Contiene la tabla de simbolos hash.
+
+> [.dynsym]: Contiene la informacion de los simbolos de las libreria dinamicas (shared object).
+
+> [.dystr]: Contiene los nombres de los simbolos de las librerias dinamicas.
+
+> [.plt]: Esta es la tabla de proceso de enlazado (Procedure linkage table).
+
+> [.rel.got]: Contiene la relocalizacion de datos G.O.T. (Global Offset Table).
+
+## El segmento **data** se ve de la siguiente manera.
+> [.data]: Contiene las variables globales inicializadas.
+
+> [.dynamic]: Contiene a las estructuras y objectos dinamicamente enlazables.
+
+> [.got.psl]: Contiene la G.O.T.
+
+> [.bss]: Contiene a las variables globales no inicializadas.
+
+No existen **program headers** en los archivos objectos relocalizables (ELF de tipo ET_REL) porque **\*.o** estan ehchos para ser enlazados en un ejecutbale, sin embargo eso no significa que deban ser cargados directamente en memoria.
+
+Los archivos cargables del kernel de linux son objetos del tipo **ET_REL** y son una excepcion a la regla, ya que estos son cargados directamente en la memoria del kernel y relocalizados en ese momento.
+
+Al generar los objetos se pueden observar muchas de las secciones que se han presentado. El siguiente comando nos ayuda a ver las secciones en un ELF:
+
+    readelf -S objfile.o
+
+Cuando se trata de un ejecutable se puede ver que nuevas secciones han sido agregadas, estas secciones son principalmente de tipo enlazamiento dinamico y relocalizaciones en tiempo de ejecucion. (Se usa el mismo comando anterior).
+
+Ejemplo: Hello World
+
+Source file: main.c 
+
+    #include <stdio.h>
+
+    #ifndef EXIT_SUCCESS
+     #define EXIT_SUCCESS 0u
+    #endif
+
+    int main (void)
+    {
+        printf("Hello World\n");
+        return EXIT_SUCCESS;
+    }
+
+Compilamos pero no linkeamos:
+
+    gcc -c main.c
+
+Usamos el comando:
+
+    readelf -S main.o
+
+Lo cual nos despliega la siguiente informacion:
+
+    There are 13 section headers, starting at offset 0x300:
+
+    Section Headers:
+      [Nr] Name              Type             Address           Offset
+           Size              EntSize          Flags  Link  Info  Align
+      [ 0]                   NULL             0000000000000000  00000000
+           0000000000000000  0000000000000000           0     0     0
+      [ 1] .text             PROGBITS         0000000000000000  00000040
+           0000000000000020  0000000000000000  AX       0     0     4
+      [ 2] .rela.text        RELA             0000000000000000  00000238
+           0000000000000048  0000000000000018   I      10     1     8
+      [ 3] .data             PROGBITS         0000000000000000  00000060
+           0000000000000000  0000000000000000  WA       0     0     1
+      [ 4] .bss              NOBITS           0000000000000000  00000060
+           0000000000000000  0000000000000000  WA       0     0     1
+      [ 5] .rodata           PROGBITS         0000000000000000  00000060
+           000000000000000c  0000000000000000   A       0     0     8
+      [ 6] .comment          PROGBITS         0000000000000000  0000006c
+           000000000000002c  0000000000000001  MS       0     0     1
+      [ 7] .note.GNU-stack   PROGBITS         0000000000000000  00000098
+           0000000000000000  0000000000000000           0     0     1
+      [ 8] .eh_frame         PROGBITS         0000000000000000  00000098
+           0000000000000038  0000000000000000   A       0     0     8
+      [ 9] .rela.eh_frame    RELA             0000000000000000  00000280
+           0000000000000018  0000000000000018   I      10     8     8
+      [10] .symtab           SYMTAB           0000000000000000  000000d0
+           0000000000000150  0000000000000018          11    12     8
+      [11] .strtab           STRTAB           0000000000000000  00000220
+           0000000000000018  0000000000000000           0     0     1
+      [12] .shstrtab         STRTAB           0000000000000000  00000298
+           0000000000000061  0000000000000000           0     0     1
+
+Usamos el siguiente comando, para generar nuestro ejecutable.
+
+    gcc main.o -o executable
+
+Nuevamente usamos:
+
+    readelf -S executable
+
+Lo cual nos despliega la siguiente informacion:
+
+    There are 28 section headers, starting at offset 0x10ba8:
+
+    Section Headers:
+      [Nr] Name              Type             Address           Offset
+           Size              EntSize          Flags  Link  Info  Align
+      [ 0]                   NULL             0000000000000000  00000000
+           0000000000000000  0000000000000000           0     0     0
+      [ 1] .interp           PROGBITS         0000000000000238  00000238
+           000000000000001b  0000000000000000   A       0     0     1
+      [ 2] .note.gnu.bu[...] NOTE             0000000000000254  00000254
+           0000000000000024  0000000000000000   A       0     0     4
+      [ 3] .note.ABI-tag     NOTE             0000000000000278  00000278
+           0000000000000020  0000000000000000   A       0     0     4
+      [ 4] .gnu.hash         GNU_HASH         0000000000000298  00000298
+           000000000000001c  0000000000000000   A       5     0     8
+      [ 5] .dynsym           DYNSYM           00000000000002b8  000002b8
+           00000000000000f0  0000000000000018   A       6     3     8
+      [ 6] .dynstr           STRTAB           00000000000003a8  000003a8
+           0000000000000092  0000000000000000   A       0     0     1
+      [ 7] .gnu.version      VERSYM           000000000000043a  0000043a
+           0000000000000014  0000000000000002   A       5     0     2
+      [ 8] .gnu.version_r    VERNEED          0000000000000450  00000450
+           0000000000000030  0000000000000000   A       6     1     8
+      [ 9] .rela.dyn         RELA             0000000000000480  00000480
+           00000000000000c0  0000000000000018   A       5     0     8
+      [10] .rela.plt         RELA             0000000000000540  00000540
+           0000000000000078  0000000000000018  AI       5    21     8
+      [11] .init             PROGBITS         00000000000005b8  000005b8
+           0000000000000018  0000000000000000  AX       0     0     4
+      [12] .plt              PROGBITS         00000000000005d0  000005d0
+           0000000000000070  0000000000000000  AX       0     0     16
+      [13] .text             PROGBITS         0000000000000640  00000640
+           0000000000000138  0000000000000000  AX       0     0     64
+      [14] .fini             PROGBITS         0000000000000778  00000778
+           0000000000000014  0000000000000000  AX       0     0     4
+      [15] .rodata           PROGBITS         0000000000000790  00000790
+           0000000000000014  0000000000000000   A       0     0     8
+      [16] .eh_frame_hdr     PROGBITS         00000000000007a4  000007a4
+           000000000000003c  0000000000000000   A       0     0     4
+      [17] .eh_frame         PROGBITS         00000000000007e0  000007e0
+           00000000000000b4  0000000000000000   A       0     0     8
+      [18] .init_array       INIT_ARRAY       000000000001fd90  0000fd90
+           0000000000000008  0000000000000008  WA       0     0     8
+      [19] .fini_array       FINI_ARRAY       000000000001fd98  0000fd98
+           0000000000000008  0000000000000008  WA       0     0     8
+      [20] .dynamic          DYNAMIC          000000000001fda0  0000fda0
+           00000000000001f0  0000000000000010  WA       6     0     8
+      [21] .got              PROGBITS         000000000001ff90  0000ff90
+           0000000000000070  0000000000000008  WA       0     0     8
+      [22] .data             PROGBITS         0000000000020000  00010000
+           0000000000000010  0000000000000000  WA       0     0     8
+      [23] .bss              NOBITS           0000000000020010  00010010
+           0000000000000008  0000000000000000  WA       0     0     1
+      [24] .comment          PROGBITS         0000000000000000  00010010
+           000000000000002b  0000000000000001  MS       0     0     1
+      [25] .symtab           SYMTAB           0000000000000000  00010040
+           0000000000000840  0000000000000018          26    65     8
+      [26] .strtab           STRTAB           0000000000000000  00010880
+           000000000000022c  0000000000000000           0     0     1
+      [27] .shstrtab         STRTAB           0000000000000000  00010aac
+           00000000000000fa  0000000000000000           0     0     1
+
+Como se habia explicado antes, ya en el ejecutable podemos ver que se han agregado las secciones que son enlazadas dinamicamente y en tiempo de ejecucion.
+
+## Simbolo ELF.
+
+Los **simbolos** son referencias a cualuqier tipo de dato o codigdo como variables globales o funciones.Por ejemplo para la funcion **prinft()** va a tomar un simbolo de entrada que apunta a la tabla dinamica de simbolos **.dymsim**. Normalmente para las librerias dinamicas o ejecutable dinamicamente enlazados existen dos tablas de simbolos.
+
+Anteriormente con el comando ***readelf -S*** en el ejecutable se pueden ver las dos secciones: **.dynsym** y **.symtab**.
+
+**.dymsym** contiene simbolos globales que referencian a simbolos de fuentes externas como por ejemplo **libc** con **printf**. 
+
+De hecho los simbolos contenidos en **.symtab** contiene todos los simbolos de **.dynsym**, asi como los simbolos locales del ejecutable tal como las variables globales, funciones locales que se han definido en el codigo.
+
+Por lo tanto **.symtab** contiene todos los simbolos, mientras que **.dynsim** contiene simbolos globales/dinamicos.
+
+Entonces Por que tenemos dos tablas de simbolos, si **.symtab** contiene todo lo que esta en **.dynsym**? Si se revisa con el comando ***readelf -S*** el ejecutable, se puede ver que algunas secciones estan marcadas con **A** (ALLOC) o **WA** (WRITE/ALLOC) o **AX** (ALLOC/EXEC), por lo tanto podemos que **.dynsym**  esta marcada con **ALLOC**, mientras que **.symtab** no tiene bandera alguna.
+
+**ALLOC** significa que la seccion sera llenada en tiempo de ejecucion y cargada en memoria, **.symtab** no es cargada en memoria porque no es necesaria para la ejecucion. 
+
+**.dymsym** contiene simbolos que solo se pueden resolver mientras el programa se ejecuta y por lo tanto hay simbolos requeridos en tiempo de ejecucion por el enlazador dinamico.
+
+Mientras que la tabla **.dymsym** es necesaria para la ejecucion de ejecutable dinamicamente enlazados, la tabla **symtab** existe para propositos de debuggeo y enlazado, por lo tanto puede ser **stripped** (removidos) para los binarios de produccion para liberar espacio.
+
+Asi luce la estructura de los simbolos ELF:
+
+    typedef struct
+    {
+      Elf64_Word    st_name;                /* Symbol name (string tbl index) */
+      unsigned char st_info;                /* Symbol type and binding */
+      unsigned char st_other;               /* Symbol visibility */
+      Elf64_Section st_shndx;               /* Section index */
+      Elf64_Addr    st_value;               /* Symbol value */
+      Elf64_Xword   st_size;                /* Symbol size */
+    } Elf64_Sym;
+
+Esta estructura la podemos encontrar dentro de las secciones **.symtab** y **.dynsym**, esto es el porque **sh_entsize** (section header entre size) las secciones son equivalentes para ***sizeof(ElfN_Sym)***.
+
+### st_name.
+**st_name** contiene un offset en la tabla de strings de la tabla de simbolos (localizada en .dynstr o .strtab), donde el nombre de el simbolo esta localizado, por ejemplo: printf.
+
+### st_value.
+**st_value** conserva el valor del simbolo (sea una direccion o offset de su localizacion).
+
+### st_size.
+**st_size** contiene el tamano del simbolo. tal como el tamano de una funcion global **ptr**, en el caso de de un sistema de 32 bits seria de 4 bytes.
+
+### st_other.
+Este miembro define la visibilidad de un simbolo.
+
+### st_shndx.
+Cada entrada de tabla de simbolos es definida en relacion a una seccion. Este miembro contiene el indice del header table.
+
+### st_info.
+**st_info** especifica el simbolo de tipo y sus atributos de vinculo. Los simbolos de tipo comienzan con **STT** mientras que los simbolos de vinculo (binding symbols) comienzan con **STB**.
+
+### Simbolos de tipo.
+> STT_NOTYPE: Simbolo de tipo indefinido.
+
+> STT_FUNC: El simbolo es asociado con una funcion u otra codigo ejecutable.
+
+> STT_OBJECT: El simbolo es asociado a un **objeto**.
+
+### Simbolos de vinculo.
+> STB_LOCAL: Los simbolos locales no son visibles fuera de la rchivo objecto que contenga su definicion, como es el caso de una funcion declarada como static.
+
+> STB_GLOBAL: Los simbolos globales son visibles a todos los archivos objetos siendo combinados. Una definicion de un archivo de un simbolo global va a satisfacer la referencia otro archivo con el mismo simbolo.
+
+> STB_WEAK: Es similar al vinculo global pero con menos precedencia, esto es que si el vinculo es debil puede ser anulado por otro simbolo con el mismo nombre sin la marca de **STB_WEAK**.
+
+Hay macros para empaquetar o desempaquetar los campos de tipos y vinculos.
+
+    /* How to extract and insert information held in the st_info field.  */
+
+    #define ELF32_ST_BIND(val)              (((unsigned char) (val)) >> 4)
+    #define ELF32_ST_TYPE(val)              ((val) & 0xf)
+    #define ELF32_ST_INFO(bind, type)       (((bind) << 4) + ((type) & 0xf))    
+
+    /* Both Elf32_Sym and Elf64_Sym use the same one-byte st_info field.  */
+    #define ELF64_ST_BIND(val)              ELF32_ST_BIND (val)
+    #define ELF64_ST_TYPE(val)              ELF32_ST_TYPE (val)
+    #define ELF64_ST_INFO(bind, type)       ELF32_ST_INFO ((bind), (type))
+
+ELF64_ST_BIND(val): extrae un vinculo de un valor de **st_info**.
+
+ELF64_ST_TYPE(val): extrae un tipo de de un valor de **st_info**.
+
+ELF64_ST_INFO(bind, type): convierte un vinculo o tipo en un valor de **st_info**.
+
+Echemos un vistazo a la tabla de simbolos del siguiente codigo:
+
+    static inline void foochu()
+    { /* Do nothing */ }
+
+    void func1()
+    { /* Do nothing */ }
+
+    _start()
+    {
+        func1();
+        foochu();
+    }
+
+Con el siguiente comando podemos ver las entradas de la tabla de simbolos para las funciones ***foochu** y ***func***.
+
+    readelf -s yourfile | egrep 'foochu|func1'
+
+Podremos ver que la funcion ***foochu*** tiene un valor de **0x8048da** y es una funcion (STT_FUNC) que tiene un vinculo local de simbolos (STB_LOCAL), esto es porque fue declarado con la palabra reservada **static** en nuestro codigo.
+
+
+    7: 080480d8 5 FUNC LOCAL  DEFAULT 2 foochu
+    8: 080480dd 5 FUNC GLOBAL DEFAULT 2 func1
+
+Recordar que los vinculos locales son aquellos cuyos simbolos no pueden ser vistos afuera del archivo tipo objecto donde han sido definidos.
+
+## ELF Relocations.
+La relocalizacion es el proceso para conectar referencias simbolicas con definiciones simbolicas. Los archivos relocalizables deben tener informacion que describa como modificar el contenido de sus secciones, para permitir a los ejecutables, librerias dinamicas tener la informacion correcta de la imagen de un programa.
+
+Imaginemos tener dos archivos tipo objeto enlazados juntos para crear un ejecutable. Tenemos obj1.o y obj2.o que contienen el codigo para llamar a una funcion llamada foo() que esta localizada en obj2.o. Ambos archivos son analizados por el linker y contienen registros de relocalizacion, estos archivos deben ser enlazados para crear un programa ejecutbale completo. Las referencias simbolicas deben ser resueltas en definiciones simbolicas, pero que significa esto? Los archivos tipo objeto son relocalizables, lo que significa que su codigo debe ser relocalizado a una locacion en una direccion dada dentro de un segmento ejecutable. Antes de la relocalizacion, el codigo contiene simbolos y codigo que no puede ser propiamente referenciado sin primero conocer la localidad en memoria.
+
+Entrada de relocalizacion:
+
+    typedef struct
+    {
+      Elf64_Addr    r_offset;               /* Address */
+      Elf64_Xword   r_info;                 /* Relocation type and symbol index */
+    } Elf64_Rel;
+
+    /* Relocation table entry with addend (in section of type SHT_RELA).  */
+
+    typedef struct
+    {
+      Elf64_Addr    r_offset;               /* Address */
+      Elf64_Xword   r_info;                 /* Relocation type and symbol index */
+      Elf64_Sxword  r_addend;               /* Addend */
+    } Elf64_Rela;
+
+    /* RELR relocation table entry */
+
+    typedef Elf32_Word      Elf32_Relr;
+    typedef Elf64_Xword     Elf64_Relr;
+
+**r_offset** apunta a la ubicacion que requiere una accion de relocalizacion. Una accion de relocalizacion descrbie los detalles de como escribir el codigo o informacion contenido en **r_offset**.
+
+**r_info** provee el indice de la table de simbolos con respecto a que ubicacion debe hacerse y el tipo de relocalizacion a aplicar.
+
+**r_addend** especifica una constante **addend** usada para calcular el valor guardado en el campo relocalizable.
+
+Echemos un vistazo al siguiente ejemplo:
+
+    _start()
+    {
+        foo();
+    }
+
+Se llama a la funcion **foo()** , esta funcion no esta localizadad directamente dentro de archivo de codigo, cuando se hace la compilacion se hara una entrada de relocalizacion que es necesaria para satisfacer las referencias simbolicas mas tarde.
+
+    $ objdump -d obj1.o
+
+    obj1.o: file format elf32-i386
+    Disassembly of section .text:
+    00000000 <func>:
+        0: 55                     push %ebp
+        1: 89 e5                  mov %esp,%ebp
+        3: 83 ec 08               sub $0x8,%esp
+        6: e8 fc ff ff ff         call 7 <func+0x7>
+        b: c9                     leave
+        c: c3                     ret
+
+Como se puede ver la llamada de **foo()** contiene el valor ***0xfffffffc*** que es literalmente el **addend** implicito. 
+
+Tambien se debe ver ***call 7***, el numero 7 es el offset de la ubicacion de relocalizacion a ser escrita.
+
+Cuando obj1.o ( es el archivo que llama a foo() que se encuentra en obj2.o) es enlazado con obj2.o para hacer un ejecutable, la entrada de relozalizacion que apunta al offset 7 es procesada por en linker, dando la instruccion de cual localizacion (offset 7) necesita ser modificada.
+
+El linker lo que hace es agregar 4 bytes al offset 7 por lo que va a contener el offset real de la funcion foo(), despues de que ha sido posicionado en alguna ubicacion dentro del ejecutable.
+
+    $ readelf -r obj1.o
+
+    Relocation section '.rel.text' at offset 0x394 contains 1 entries:
+     Offset    Info     Type     Sym.Value  Sym. Name
+    00000007 00000902 R_386_PC32  00000000   foo
+
+Como se puede ver, el campo de relocalizacion en 7 esta especificado por la entrada de relocalizacion **r_offset**.
+> **R_386_PC32** es el tipo de relocalizacion. 
+
+> Para entender estos tipos, se debe leer las especificacion del ELF.
+
+> Cada tipo de relocalizacion requiere un calculo diferente en la relocalizacion dentro del sistema. **R_386_PC32** modifica el sistema con S + A - P.
+
+> S es el valor de el simbolos donde reside el indice en la entrada de relocalizacion.
+
+> A es el **addend** encontrado en la entrada de relocalizacion.
+
+> P es el lugar (seccion de offset o direccion) de la unidad de almacenamiento siendo relocalizada (calculada usando **r_offset**).
+
+Observemos la salida final despues de compilar obj1.o y obj2.o en un sistema de 32 bits.
+
+    gcc -nostdlib obj1.o obj2.o -o relocated
+    objdump -d relocated
+
+    test: file format elf32-i386
+
+    Disassembly of section .text:
+
+    080480d8 <func>:
+     80480d8: 55                       push %ebp
+     80480d9: 89 e5                    mov %esp,%ebp
+     80480db: 83 ec 08                 sub $0x8,%esp
+     80480de: e8 05 00 00 00           call 80480e8 <foo>
+     80480e3: c9                       leave
+     80480e4: c3                       ret
+     80480e5: 90                       nop
+     80480e6: 90                       nop
+     80480e7: 90                       nop
+     
+    080480e8 <foo>:
+     80480e8: 55                       push %ebp
+     80480e9: 89 e5                    mov %esp,%ebp
+     80480eb: 5d                       pop %ebp
+     80480ec: c3                       ret
+
+Podemos ver que la llamada de la instruccion (el target de relocalizacion) en ***0x80480de*** ha sido modificado con un offset de 32 bits de 5 el cual apunta a foo(). 5 es el valor de la accion de relocalizacion R386_PC_32.
+
+> S + A - P: 0x80480e8 + 0xfffffffc - 0x80480df = 5
+
+0xfffffffc es igual a -4 si es un entero con signo, asi que el calculo seria como sigue:
+
+> 0x80480e8 + (0x80480df + sizeof(uint32_t))
+
+Para calcular el offset en una direccion virtual, se usa el siguiente calculo:
+
+> direccion_de_llamada + offset + 5 (Donde 5 es la longitud de la instruccion de llamada).
+
+En este caso seria: 0x80480de + 5 + 5 = 0x80480e8
+
+Una direccion puede ser calculado en un offset con el siguiente calculo:
+
+> address - address_of_call - 4 (Donde 4 es la longitud del operador inmediato a la instruccion de llamada que es de 32 bits).
+
+## ELF dynamic linking.
+Cuando un programa es cargado en memoria, el enlazador dinamico tambien carga y enlaza las librerias dinamicas necesitadas para direccionar el espacio.
+
+El topico de enlazamiento dinamico no es muy entendido del todo, las librerias dinamicas son compiladas independiente de la posicion y por lo tanto pueden ser facilmente relocalizadas en proceso de direccionamiento de espacio. Una libreria dinamica (shared library) es un objeto ELF dinamico. Si se mira con ***readelf -h lib.so*** se podra ver que el tipo **e_type**(ELF file type) es llamado **ET_DYN**. Los objetos dinamicos son muy similares a los ejecutables aunque en el caso de los objetos dinamicos no se tiene un segmento **PT_INTERP** hasta que son cargados por el interprete y por lo tanto no seran invocado por el interprete.
+
+Cuando una libreria dinamica es cargada en un proceso de direccion de espacio, tiene que estar debidamente ligado a otra librerias dinamicas. El linker dinamico debe modificar GOT (Global Offset Table) del ejecutable (localizado en la seccion .got.plt), que es una tbala de direcciones localizada en el segmento **data**. Es en el segmento **data**  porque se necesita que se pueda escribir (al menos inicialmente). El linker dinamico llena el GOT con las direcciones de las librerias dinamicas resueltas.
+
+## El vector auxiliar.

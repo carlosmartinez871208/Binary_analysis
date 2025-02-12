@@ -800,6 +800,191 @@ Cuando un programa es cargado en memoria, el enlazador dinamico tambien carga y 
 
 El topico de enlazamiento dinamico no es muy entendido del todo, las librerias dinamicas son compiladas independiente de la posicion y por lo tanto pueden ser facilmente relocalizadas en proceso de direccionamiento de espacio. Una libreria dinamica (shared library) es un objeto ELF dinamico. Si se mira con ***readelf -h lib.so*** se podra ver que el tipo **e_type**(ELF file type) es llamado **ET_DYN**. Los objetos dinamicos son muy similares a los ejecutables aunque en el caso de los objetos dinamicos no se tiene un segmento **PT_INTERP** hasta que son cargados por el interprete y por lo tanto no seran invocado por el interprete.
 
-Cuando una libreria dinamica es cargada en un proceso de direccion de espacio, tiene que estar debidamente ligado a otra librerias dinamicas. El linker dinamico debe modificar GOT (Global Offset Table) del ejecutable (localizado en la seccion .got.plt), que es una tbala de direcciones localizada en el segmento **data**. Es en el segmento **data**  porque se necesita que se pueda escribir (al menos inicialmente). El linker dinamico llena el GOT con las direcciones de las librerias dinamicas resueltas.
+Cuando una libreria dinamica es cargada en un proceso de direccion de espacio, tiene que estar debidamente ligado a otra librerias dinamicas. El linker dinamico debe modificar GOT (Global Offset Table) del ejecutable (localizado en la seccion .got.plt), que es una tabla de direcciones localizada en el segmento **data**. Es en el segmento **data**  porque se necesita que se pueda escribir (al menos inicialmente). El linker dinamico llena el GOT con las direcciones de las librerias dinamicas resueltas.
 
 ## El vector auxiliar.
+Cuando un programa se carga en memoria por el **sys_execve()** syscall (llamada de sistema), el ejecutable es mapeado en una pila (stack).
+
+La pila (stack) para ese proceso se prepara de una manera muy especifica para pasar informacion al enlazador dinamico (dynamic linker).
+
+Esta preparacion y arreglo de informacion es conocido como auxiliar vector (vector auxiliar) o auxv. 
+
+El fondo de la pila (que es la direccion de memoria mas alta mientras la pila disminuye) es cargado con la siguiente informacion.
+
+    Auxiliar Vector |
+    ----------------|
+    environ         |
+    ----------------|
+    argv            |
+    ----------------|
+    Stack           |
+    ----------------|
+    |
+    V
+
+    [argc][argv][envp][auxiliary][.ascii data for argv/envp]
+
+El vector auxiliar (auxv) tiene la siguiente estuctura:
+
+    typedef struct
+    {
+      uint64_t a_type;              /* Entry type */
+      union
+        {
+          uint64_t a_val;           /* Integer value */
+          /* We use to have pointer elements added here.  We cannot do that,
+             though, since it does not work when using 32-bit definitions
+             on 64-bit platforms and vice versa.  */
+        } a_un;
+    } Elf64_auxv_t;
+
+**a_type** describe la entrada de ***auxv*** y **a_val** provee su valor.
+
+A continuacion se muestran los tipos de entradas mas importantes que requiere el enlazador dinamico (dynamic linker).
+
+    #define AT_NULL         0               /* End of vector */
+    #define AT_IGNORE       1               /* Entry should be ignored */
+    #define AT_EXECFD       2               /* File descriptor of program */
+    #define AT_PHDR         3               /* Program headers for program */
+    #define AT_PHENT        4               /* Size of program header entry */
+    #define AT_PHNUM        5               /* Number of program headers */
+    #define AT_PAGESZ       6               /* System page size */
+    #define AT_BASE         7               /* Base address of interpreter */
+    #define AT_FLAGS        8               /* Flags */
+    #define AT_ENTRY        9               /* Entry point of program */
+    #define AT_NOTELF       10              /* Program is not ELF */
+    #define AT_UID          11              /* Real uid */
+    #define AT_EUID         12              /* Effective uid */
+    #define AT_GID          13              /* Real gid */
+    #define AT_EGID         14              /* Effective gid */
+    #define AT_CLKTCK       17              /* Frequency of times() */
+
+El enlazador dinamico (dynamic linker) procesa la informacion del stack para ejecucion del programa.
+
+El enlazador debe saber donde se encuentran los program headers, el punto de entrada del programa, etcetera.
+
+**auxv** se procesa por una funcion del kernel llamada **create_elf_tables()** que reside en la fuente de codigo de linux **/usr/src/linux/fs/binfmt_elf.c**
+
+El proceso de ejecucion de un programa se ve de la siguiente manera:
+
+> 1. sys_execve() ->
+> 2. Calls do_execve_common() ->
+> 3. Calls search_binary_handler() ->
+> 4. Calls load_elf_binary() ->
+> 5. Calls create_elf_tables() ->
+
+A continuacion se muestra codigo de **create_elf_tables()** que reside en la fuente de codigo de linux **/usr/src/linux/fs/binfmt_elf.c** que agrega las entradas de **auxv**.
+
+    NEW_AUX_ENT(AT_PAGESZ, ELF_EXEC_PAGESIZE);
+    NEW_AUX_ENT(AT_PHDR, load_addr + exec->e_phoff);
+    NEW_AUX_ENT(AT_PHENT, sizeof(struct elf_phdr));
+    NEW_AUX_ENT(AT_PHNUM, exec->e_phnum);
+    NEW_AUX_ENT(AT_BASE, interp_load_addr);
+    NEW_AUX_ENT(AT_ENTRY, exec->e_entry);
+
+Como se puede ver, el punto de entrada del ELF y las direcciones de los program headers, se ubican en el stack con la macro del kernel **NEW_AUX_ENT()**.
+
+Una vez un programa en cargado en memoria y el vector auxiliar ha sido llenado, el control se pasa al enlazador dinamico.
+
+En enlazador dinamico resuelve los simbolos y las relocalizaciones para las libreria dinamicas que son enlazadas en el espacio de direccion de procesos.
+
+Por default, un ejecutable es dinamicamente enlazado con la libreria GNU C **libc.so**.
+
+El comando **lld** mostrara las dependencias de las librerias dinamicas de un ejecutable.
+
+## PLT/GOT
+La tabla de linkeo de procesos (procedure linkage table - PLT) y GOT (Global Offset Table) se pueden encontrar en los archivos ejecutable y librerias dinamicas.
+
+Cuando un programa llama a una funcion de alguna libreria dinamica, por ejemplo: **strcpy()** o **printf()**, que no son resueltas en tiempo de ejecucion, existe un mecanismo para dinamiocamente enlazar las librerias dinamicas y resolver las direcciones de las funciones compartidas.
+
+Cuando un programa dinamicamente enlazado es compilado, este maneja llamadas de funciones de una libreria de forma determinada, muy diferente a simple llamada de una funcion local.
+
+Por ejemplo, echemos un vistazo cuando se llama a **libc.so** con la funcion fgets().
+
+    objdump -d test
+    ...
+    8048481: e8 da fe ff ff call 8048360<fgets@plt>
+    ...
+
+La direccion **0x8048360** corresponde a la entrada del PLT para fgets()
+
+    objdump -d test (grep for 8048360)
+    ...
+    08048360<fgets@plt>:              /* A jmp into the GOT */
+    8048360: ff 25 00 a0 04 08        jmp *0x804a000
+    8048366: 68 00 00 00 00           push $0x0
+    804836b: e9 e0 ff ff ff           jmp 8048350 <_init+0x34>
+    ...
+
+La llamada de fgets() apunta a **0x8048360**, que es el salto a la tabla de entradas de PLT para fgets(). Como se puede ver, se trata de un salto indirecto a la direccion almacenada en **0x804a000**.
+
+Esta direccion es un entrada GOT que alberga la direccion actual de la funcion **fgets()** en la libreria dinamica **libc**.
+
+Cuando la funcion es llamada por primera vez, su direccion aun no ha sido resuelto por el enlazador dinamico, cuando el comportamiento por default **lazy linking** esta siendo usado.
+
+**Lazy linkig** significa que el enlazador dinamico no resuelve cada funcion en el momento de carga. Por el contrario, resuelve las funciones conforme son llamadas, que es posible a traves de las secciones **.plt** y **got.plt** (que corresponden al tabla de linkeo de procesos y la tabla global de offsets).
+
+Este comportamiento puede ser cambiado a lo que se llama **strict linking** con la variable de ambiente **LD_BIND_NOW**, de esta manera el linkeo dinamico se hace en el momento de carga del programa.
+
+**Lazy linking** incrementa el rendimiento al momento de carga, pero se puede volver impredecible porque un error de linkeo puede ocurrir en tiempo de ejecucion del programa, sobre todo cuando el programa lleva corriendo un tiempo considerable.
+
+Veamos la relocalizacion de entradas para fgets():
+
+    readelf -r test
+    Offset    Info          Type         SymValue  SymName
+    ...
+    0804a000  00000107  R_386_JUMP_SLOT  00000000  fgets
+    ...
+
+Hay que notar que el offset de relocalizacion es la direccion 0x804a000, la misma direccion que **fgets()** PLT salto. Asumiendo que **fgest()** ha sido llamada por primera vez, el linker ha resuelto la direccion de **fgets()**vy puesto su valor en la entrada de GOT para **fgets()**.
+
+Veamos en el GOT:
+
+    08049ff4 <_GLOBAL_OFFSET_TABLE_>:
+    8049ff4: 28 9f 04 08 00 00         sub %bl,0x804(%edi)
+    8049ffa: 00 00                     add %al,(%eax)
+    8049ffc: 00 00                     add %al,(%eax)
+    8049ffe: 00 00                     add %al,(%eax)
+    804a000: 66 83 04 08 76            addw $0x76,(%eax,%ecx,1)
+    804a005: 83 04 08 86               addl $0xffffff86,(%eax,%ecx,1)
+    804a009: 83 04 08 96               addl $0xffffff96,(%eax,%ecx,1)
+    804a00d: 83                        .byte 0x83
+    804a00e: 04 08                     add $0x8,%al
+
+La direccion **0x80403866** es encontrada en la direccion **0x804a000** en el GOT.
+
+Hya que recordar que **little endiand** tiene un orden de bytes inversos, por lo tanto aparece como **66 83 04 08**, este no es la direccion de la funcion **fgets()** mientras no haya sido resuelta por el linker, sin mebargo apunta la entrada de PLT para **fgets()**.
+
+    08048360 <fgets@plt>:
+    8048360:        ff 25 00 a0 04 08          jmp *0x804a000
+    8048366:        68 00 00 00 00             push $0x0
+    804836b:        e9 e0 ff ff ff             jmp 8048350 <_init+0x34>
+
+Entonces, ***jmp \*0x804a000*** brinca a la direccion contenida dentro de 0x80403866, que las instruccion ***push $0x0***.
+
+Esa instruccion push tiene el proposito de poner la entrada GOT para **fgets()** en el stack.
+
+El offset de la enyrada GOT de **fgets()** es 0x0, que corresponde a la primera entrada GOT que esta reservada para un valor de simbolo de una libreria dinamica, la cual es la cuarta entrada. En otras palabras la direcciones de las librerias dinamicas no son conectadas empezando el GOT (GOT[0]) y en realidad comienzan en GOT[3], debido a que las primeras tres estan reservadas para otros propositos.
+
+> 1. GOT[0] contiene direcciones que apuntan al segmento dinamico de un ejecutbale, que es usado por el enlazador dinamico para extraer informacion relacionada con el enlazamiento dinamico.
+
+> 2. GOT[2] contiene direcciones de la estructura **link_map** que es usada por el enlazador dinamico para resolver simbolos.
+
+> 3. GOT[2] contiene direcciones de los enlazadores dinamicos **_dl_runtime_resoolve ()**, esta funcion resulve la direccion actual del simbolo para la funcion de la libreria dinamica.
+
+La ultima instruccion en **fgets()** PLT stub es un salto a **8048350. Esta direccion apunta a la primera entrada de PLT en cada ejecutable, conocida como PLT-0.
+
+PLT-0 de nuestro ejecutable contiene el siguiente codigo.
+
+    8048350:     ff 35 f8 9f 04 08      pushl 0x8049ff8
+    8048356:     ff 25 fc 9f 04 08      jmp *0x8049ffc
+    804835c:     00 00                  add %al,(%eax)
+
+La primera instruccion push1 nos apunta a la segunda entrada GOT, GOT[1] en el stack, que contiene la direccion de la estructura **link_map**.
+
+El salto \*0x8049ffc hace un salto indirecto a la tercera entrada GOT, GOT[2], que contiene la direccion de el enlazador dinamico **_dl_runtime_resolve()**, por lo tanto se transfiere el control al enlazador dinamico y se resuelve la direccion de **fgets()**.
+
+Una vez **fgets()** ha sido resulta, todas las futuras llamada a la entrada PLT **forfgets()** resultara en brinco a el codigo de **fgets()**.
+
+La proxima vez que **fgets()** sea llamada,la entrada PLT brincara directamente a la funcion, a menos que sea haga el proceso de relocalizacion nuevamente.
+

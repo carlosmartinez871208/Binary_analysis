@@ -988,3 +988,72 @@ Una vez **fgets()** ha sido resulta, todas las futuras llamada a la entrada PLT 
 
 La proxima vez que **fgets()** sea llamada,la entrada PLT brincara directamente a la funcion, a menos que sea haga el proceso de relocalizacion nuevamente.
 
+## Segmento dinamico.
+El segmento dinamico tiene un header que lo referencia, pero tambien tiene un header de programa que lo referencia porque tiene que ser en el momento de ejecucion por el segmento dinamico.
+
+Como los headers de las secciones no se cargan en memoria, deben tener asociado un header de programa para ello.
+
+El segmento dinamico tiene la siguiente estructura:
+
+    typedef struct
+    {
+      Elf64_Sxword  d_tag;                  /* Dynamic entry type */
+      union
+    {
+          Elf64_Xword d_val;                /* Integer value */
+          Elf64_Addr d_ptr;                 /* Address value */
+        } d_un;
+    } Elf64_Dyn;
+
+**d_tag** contiene una etiqueta que puede emparentarse con alguna de las numerosas definiciones que pueden ser encontradas en un ELF. 
+
+A continuacion se listan las mas importantes usadas por el linker dinamico.
+
+### DT_NEEDED
+Contiene el offste de la tabla de cadenas al nombre de la libreria dinamica compartida.
+
+### DT_SYMTAB
+Contiene las direcciones de la tabla de los simbolos dinamicos **.dynsym**.
+
+### DT_HASH
+Contiene la direcciones de la tabla de simbolos hash **.hash**.
+
+### DT_STRTAB
+Contiene las direcciones de la tabla de cadenas de simbolos **.dynstr**.
+
+### DT_PLTGOT
+Contiene la direccion de la tabla de offsets globales.
+
+Las etiquetas dinamicas demuestran coma la localizacion de algunas secciones pueden ser enocntradas a traves del segmento dinamico que puede ayudar en la tarea de reconstruccion forense de reconstruir una tabla de headers de secciones.
+
+Si el header de la tabla ha sido borrado, una herramienta puede reconstruir las partes de este a partir del segmento dinamico.
+
+Otros segmentos como **text** y **data** pueden juntar la informacion que se necesita (como **.text** y **.data**).
+
+**d_val** contiene unvalor entero que tiene varias interpretaciones como puede ser el tamano de la entrada de relozalizacion para dar una instancia.
+
+**d_ptr** contiene la direccion virtual de memoria que apunta a distintas localizaciones necesitadas por el linker, un buen ejemplo seria la direccion de la tabla de simbolos.
+
+El enlazador dinamico utiliza **ElfN_Dyn d_tags** para localizar diferentes partes del segmento dinamico que contiene una referencia a una parte del ejecutable a traves de **d_tag** asi como **DT_SYMTAB** para proveer la direccion virtual de la tabla de simbolos.
+
+Cuando el linker dinamico es mapeado en memoria, primero maneja cualquiera de sus propias relocalizaciones si es necesario, ***hay que recordar que el linker o enlazador es en si una libreria dinamica***.
+
+El segmento dinamico de un programa ejecutable es usado por el linker dinamico y busca las etiquetas de **DT_NEDEED** que contienen apuntadores a las cadena o nombres de direcciones de las librerias dinamicas usadas.
+
+Cuando se mapea una libreria dinamica en memoria, se accede al segmento dinamico de la libreria y agrega la tabla de simbolos de la libreria a una tabla de simbolos que existen pararetener la tabla de simbolos de cada libreria mapeada.
+
+El linker crea una estructura de entrada **link_map** para cada libreria dinamica y la agrega en una lista ligada.
+
+    struct link_map
+    {
+        ElfW(Addr) l_addr;                  /* Base address shared object is loaded at. */
+        char *l_name;                       /* Absolute file name object was found in. */
+        ElfW(Dyn) *l_ld;                    /* Dynamic section of the shared object. */
+        struct link_map *l_next, *l_prev;   /* Chain of loaded objects. */
+    };
+
+Una vez que el linker ha terminado la construccion de la lista de sus dependencias, maneja las relocalizaciones de cada libreria, de manera similar a las relocalizaciones que se han discutido anteriormente.
+
+**Lazy linking** aun usa **PLT/GOT** de las librerias dinamicas, por lo tanto las relocalizaciones de GOT no sucederan hasta que la funcion haya sido llamada.
+
+Ver el ejercicio **example1**.
